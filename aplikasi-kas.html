@@ -913,6 +913,7 @@
         const USERS_KEY = "kasAppUsers";
         const SESSION_KEY = "kasAppSession";
         const TX_KEY = "kasAppTransaksi";
+        const TX_BACKUP_KEY = TX_KEY + "_backup";
         const ADMIN_USERNAME = "Wingchun";
         const MONTHS_ID = [
           "Jan",
@@ -1039,22 +1040,6 @@
             loginError.textContent = "Username atau password salah.";
           }
         });
-
-        const existingSession = getSession();
-        if (existingSession) {
-          const users = getUsers();
-          const stillExists = users.find(
-            (u) => u.username === existingSession.username,
-          );
-          if (stillExists) {
-            showApp(stillExists);
-          } else {
-            clearSession();
-            showLogin();
-          }
-        } else {
-          showLogin();
-        }
 
         // ---------- Kelola User Modal ----------
         const modalUser = document.getElementById("modal-user");
@@ -1220,16 +1205,41 @@
           tanggalInput.value = toDateInputValue(new Date());
 
           function loadTx() {
+            let primary = null;
             try {
               const raw = localStorage.getItem(TX_KEY);
-              return raw ? JSON.parse(raw) : [];
+              const parsed = raw ? JSON.parse(raw) : [];
+              if (Array.isArray(parsed)) primary = parsed;
             } catch (e) {
-              return [];
+              console.warn("Gagal membaca data transaksi utama:", e);
             }
+
+            if (primary && primary.length > 0) {
+              return primary;
+            }
+
+            // Primary kosong/rusak: coba pulihkan dari cadangan.
+            try {
+              const rawBackup = localStorage.getItem(TX_BACKUP_KEY);
+              const parsedBackup = rawBackup ? JSON.parse(rawBackup) : null;
+              if (Array.isArray(parsedBackup) && parsedBackup.length > 0) {
+                console.warn(
+                  "Data transaksi utama kosong/rusak, memulihkan dari cadangan.",
+                );
+                localStorage.setItem(TX_KEY, JSON.stringify(parsedBackup));
+                return parsedBackup;
+              }
+            } catch (e) {
+              console.warn("Gagal membaca cadangan data transaksi:", e);
+            }
+
+            return primary || [];
           }
 
           function saveTx() {
-            localStorage.setItem(TX_KEY, JSON.stringify(transaksi));
+            const data = JSON.stringify(transaksi);
+            localStorage.setItem(TX_KEY, data);
+            localStorage.setItem(TX_BACKUP_KEY, data);
           }
 
           function genId() {
@@ -1574,6 +1584,23 @@
 
           renderAllRef = renderAll;
           renderAll();
+        }
+
+        // ---------- Bootstrap: cek sesi & tampilkan layar yang sesuai ----------
+        const existingSession = getSession();
+        if (existingSession) {
+          const users = getUsers();
+          const stillExists = users.find(
+            (u) => u.username === existingSession.username,
+          );
+          if (stillExists) {
+            showApp(stillExists);
+          } else {
+            clearSession();
+            showLogin();
+          }
+        } else {
+          showLogin();
         }
       })();
     </script>
